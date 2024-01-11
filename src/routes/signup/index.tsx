@@ -8,6 +8,7 @@ import {
   routeLoader$,
   Link,
 } from "@builder.io/qwik-city";
+import { LuciaError } from "lucia";
 import { auth } from "~/lib/lucia";
 
 export const useUserLoader = routeLoader$(async (event) => {
@@ -22,33 +23,41 @@ export const useUserLoader = routeLoader$(async (event) => {
 
 export const useSignupUser = routeAction$(
   async (values, event) => {
-    const authRequest = auth.handleRequest(event);
-    const user = await auth.createUser({
-      key: {
-        providerId: "username",
-        providerUserId: values.username,
-        password: values.password,
-      },
-      attributes: {
-        username: values.username,
-        names: values.names,
-        last_names: values.lastNames,
-      },
-    });
-    const session = await auth.createSession({
-      userId: user.userId,
-      attributes: {},
-    });
-    authRequest.setSession(session);
+    try {
+      const authRequest = auth.handleRequest(event);
+      const user = await auth.createUser({
+        key: {
+          providerId: "username", // auth method
+          providerUserId: values.username.toLowerCase(), // unique id when using "username" auth method
+          password: values.password, // hashed by Lucia
+        },
+        attributes: {
+          username: values.username,
+        },
+      });
+      const session = await auth.createSession({
+        userId: user.userId,
+        attributes: {},
+      });
+      authRequest.setSession(session); // set session cookie
+    } catch (e) {
+      if (e instanceof LuciaError && e.message === "AUTH_DUPLICATE_KEY_ID") {
+        return event.fail(400, {
+          message: "Username already taken",
+        });
+      }
+      return event.fail(500, {
+        message: "An unknown error occurred",
+      });
+    }
 
-    // redirect to home page
+    // redirect to
+    // make sure you don't throw inside a try/catch block!
     throw event.redirect(303, "/");
   },
   zod$({
     username: z.string().min(2),
     password: z.string().min(5),
-    names: z.string().min(2),
-    lastNames: z.string().min(2),
   }),
 );
 
@@ -60,21 +69,6 @@ export default component$(() => {
         action={signupUserAction}
         class="form-control mx-auto mt-32 max-w-lg"
       >
-        <label for="names" class="label">
-          Nombres
-        </label>
-        <input type="text" name="names" class="input bg-base-200" id="names" />
-
-        <label for="lastNames" class="label">
-          Apellidos
-        </label>
-        <input
-          type="text"
-          name="lastNames"
-          class="input bg-base-200"
-          id="lastNames"
-        />
-
         <label for="username" class="label">
           Username
         </label>
@@ -100,6 +94,10 @@ export default component$(() => {
             Login
           </Link>
         </p>
+
+        {signupUserAction.value?.message && (
+          <p class="font-bold text-error">{signupUserAction.value.message}</p>
+        )}
       </Form>
     </>
   );
