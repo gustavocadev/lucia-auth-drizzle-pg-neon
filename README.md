@@ -1,6 +1,6 @@
 # Username & password example with Lucia and Qwik City
 
-This example uses `better-sqlite3` and Drizzle ORM.
+This example uses `pg` and Drizzle ORM.
 
 ```bash
 # install dependencies
@@ -23,7 +23,10 @@ This example is built for Node.js 20. If you're using Node.js 16/18, un-comment 
 
 ## User schema
 
-| id         | type     | unique |
-| ---------- | -------- | :----: |
-| `id`       | `string` |        |
-| `username` | `string` |   ✓    |
+| id           | type     | unique |
+| ------------ | -------- | :----: |
+| `id`         | `string` |        |
+| `username`   | `string` |   ✓    |
+| `names`      | `string` |        |
+| `last_names` | `string` |        |
+| `email`      | `string` |   ✓    |
