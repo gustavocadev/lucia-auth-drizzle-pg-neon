@@ -9,11 +9,11 @@ import {
   Link,
 } from "@builder.io/qwik-city";
 import { generateId } from "lucia";
-import { handleRequest } from "~/utils/handleRequest";
-import { DatabaseError } from "pg";
+import pg from "pg";
 import { Argon2id } from "oslo/password";
 import { db } from "~/lib/db";
 import { userTable } from "~/lib/schema";
+import { handleRequest } from "~/lib/lucia";
 
 export const useUserLoader = routeLoader$(async (event) => {
   const authRequest = handleRequest(event);
@@ -37,7 +37,10 @@ export const useSignupUser = routeAction$(
         password: hashPassword,
       });
     } catch (e) {
-      if (e instanceof DatabaseError && e.message === "AUTH_DUPLICATE_KEY_ID") {
+      if (
+        e instanceof pg.DatabaseError &&
+        e.message === "AUTH_DUPLICATE_KEY_ID"
+      ) {
         return event.fail(400, {
           message: "Username already taken",
         });
