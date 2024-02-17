@@ -10,11 +10,10 @@ import {
 } from "@builder.io/qwik-city";
 import { eq } from "drizzle-orm";
 import { Argon2id } from "oslo/password";
-import { DatabaseError } from "pg";
+import pg from "pg";
 import { db } from "~/lib/db";
-import { lucia } from "~/lib/lucia";
+import { handleRequest, lucia } from "~/lib/lucia";
 import { userTable } from "~/lib/schema";
-import { handleRequest } from "~/utils/handleRequest";
 
 export const useUserLoader = routeLoader$(async (event) => {
   const authRequest = handleRequest(event);
@@ -41,8 +40,6 @@ export const useLoginAction = routeAction$(
         .from(userTable)
         .where(eq(userTable.username, values.username));
 
-      console.log({ user });
-
       //2. if user is not found, throw error
       if (!user) {
         return event.fail(400, {
@@ -68,7 +65,7 @@ export const useLoginAction = routeAction$(
       authRequest.setSession(session); // set session cookie
     } catch (e) {
       if (
-        e instanceof DatabaseError &&
+        e instanceof pg.DatabaseError &&
         (e.message === "AUTH_INVALID_KEY_ID" ||
           e.message === "AUTH_INVALID_PASSWORD")
       ) {
