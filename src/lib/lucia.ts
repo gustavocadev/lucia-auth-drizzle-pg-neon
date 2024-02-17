@@ -2,6 +2,7 @@ import { DrizzlePostgreSQLAdapter } from "@lucia-auth/adapter-drizzle";
 import { db } from "./db";
 import { sessionTable, userTable, SelectUser } from "./schema";
 import { Lucia } from "lucia";
+import { qwikLuciaConfig } from "qwik-lucia";
 
 const adapter = new DrizzlePostgreSQLAdapter(db, sessionTable, userTable);
 
@@ -18,6 +19,8 @@ export const lucia = new Lucia(adapter, {
     };
   },
 });
+
+export const { handleRequest } = qwikLuciaConfig(lucia);
 
 // IMPORTANT!
 declare module "lucia" {
