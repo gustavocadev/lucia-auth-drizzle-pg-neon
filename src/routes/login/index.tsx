@@ -8,12 +8,17 @@ import {
   Form,
   Link,
 } from "@builder.io/qwik-city";
-import { auth } from "~/lib/lucia";
-import { LuciaError } from "lucia";
+import { eq } from "drizzle-orm";
+import { Argon2id } from "oslo/password";
+import { DatabaseError } from "pg";
+import { db } from "~/lib/db";
+import { lucia } from "~/lib/lucia";
+import { userTable } from "~/lib/schema";
+import { handleRequest } from "~/utils/handleRequest";
 
 export const useUserLoader = routeLoader$(async (event) => {
-  const authRequest = auth.handleRequest(event);
-  const session = await authRequest.validate();
+  const authRequest = handleRequest(event);
+  const { session } = await authRequest.validateUser();
   if (session) {
     throw event.redirect(303, "/");
   }
@@ -23,25 +28,47 @@ export const useUserLoader = routeLoader$(async (event) => {
 
 export const useLoginAction = routeAction$(
   async (values, event) => {
-    const authRequest = auth.handleRequest(event);
+    const authRequest = handleRequest(event);
 
     try {
-      // find user by key
-      // and validate password
-      const key = await auth.useKey(
-        "username",
-        values.username.toLowerCase(),
+      //1. search for user
+      const [user] = await db
+        .select({
+          id: userTable.id,
+          passwordHash: userTable.password,
+          username: userTable.username,
+        })
+        .from(userTable)
+        .where(eq(userTable.username, values.username));
+
+      console.log({ user });
+
+      //2. if user is not found, throw error
+      if (!user) {
+        return event.fail(400, {
+          message: "Incorrect username or password",
+        });
+      }
+
+      // 3. validate password
+      const isValidPassword = await new Argon2id().verify(
+        user.passwordHash,
         values.password,
       );
 
-      const session = await auth.createSession({
-        userId: key.userId,
-        attributes: {},
-      });
+      if (!isValidPassword) {
+        return event.fail(400, {
+          message: "Incorrect username or password",
+        });
+      }
+
+      // 4. create session
+      const session = await lucia.createSession(user.id, {});
+
       authRequest.setSession(session); // set session cookie
     } catch (e) {
       if (
-        e instanceof LuciaError &&
+        e instanceof DatabaseError &&
         (e.message === "AUTH_INVALID_KEY_ID" ||
           e.message === "AUTH_INVALID_PASSWORD")
       ) {

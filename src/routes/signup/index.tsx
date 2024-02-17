@@ -8,12 +8,16 @@ import {
   routeLoader$,
   Link,
 } from "@builder.io/qwik-city";
-import { LuciaError } from "lucia";
-import { auth } from "~/lib/lucia";
+import { generateId } from "lucia";
+import { handleRequest } from "~/utils/handleRequest";
+import { DatabaseError } from "pg";
+import { Argon2id } from "oslo/password";
+import { db } from "~/lib/db";
+import { userTable } from "~/lib/schema";
 
 export const useUserLoader = routeLoader$(async (event) => {
-  const authRequest = auth.handleRequest(event);
-  const session = await authRequest.validate();
+  const authRequest = handleRequest(event);
+  const { session } = await authRequest.validateUser();
   if (session) {
     throw event.redirect(303, "/");
   }
@@ -24,24 +28,16 @@ export const useUserLoader = routeLoader$(async (event) => {
 export const useSignupUser = routeAction$(
   async (values, event) => {
     try {
-      const authRequest = auth.handleRequest(event);
-      const user = await auth.createUser({
-        key: {
-          providerId: "username", // auth method
-          providerUserId: values.username.toLowerCase(), // unique id when using "username" auth method
-          password: values.password, // hashed by Lucia
-        },
-        attributes: {
-          username: values.username,
-        },
+      const hashPassword = await new Argon2id().hash(values.password);
+      const userId = generateId(15);
+
+      await db.insert(userTable).values({
+        id: userId,
+        username: values.username,
+        password: hashPassword,
       });
-      const session = await auth.createSession({
-        userId: user.userId,
-        attributes: {},
-      });
-      authRequest.setSession(session); // set session cookie
     } catch (e) {
-      if (e instanceof LuciaError && e.message === "AUTH_DUPLICATE_KEY_ID") {
+      if (e instanceof DatabaseError && e.message === "AUTH_DUPLICATE_KEY_ID") {
         return event.fail(400, {
           message: "Username already taken",
         });
